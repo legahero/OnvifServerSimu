@@ -1,0 +1,212 @@
+#include "qsoapdiscoveryserver.h"
+#include "qsoapmessage.h"
+#include <QUuid>
+
+const QHostAddress IPV6_DISCOVERY_MCAST("ff02::c");
+const QHostAddress IPV4_DISCOVERY_MCAST("239.255.255.250");
+const int DISCOVERY_MCAST_PORT = 3702;
+
+QSoapDiscoveryServer::QSoapDiscoveryServer(QObject *parent) : QObject(parent)
+{
+    udpSocket = new QUdpSocket(this);
+    udpSocket->bind(QHostAddress::Any, 0, QUdpSocket::ShareAddress);
+    //udpSocket->bind(QHostAddress::LocalHost, 3702);
+
+    //udpSocket->joinMulticastGroup(IPV4_DISCOVERY_MCAST);
+
+    connect(udpSocket, SIGNAL(readyRead()),this, SLOT(readPendingDatagrams()));
+    //connect(udpSocket, SIGNAL(readyRead()),this, SLOT(readPendingDatagrams()));
+}
+
+QSoapDiscoveryServer::~QSoapDiscoveryServer()
+{
+    Bye();
+
+    //udpSocket->leaveMulticastGroup(IPV4_DISCOVERY_MCAST);
+    udpSocket->close();
+
+    //delete udpSocket;
+}
+
+/*
+ * SOAP action:
+http://www.onvif.org/ver10/network/wsdl/Hello
+Input:
+[Hello] [HelloType]
+Output:
+[HelloResponse] [ResolveType]
+ * */
+void QSoapDiscoveryServer::Hello()
+{
+    QSoapMessage soapMessage;
+    soapMessage.envelope.attributes.insert("xmlns:SOAP-ENV","http://www.w3.org/2003/05/soap-envelope");
+    soapMessage.envelope.attributes.insert("xmlns:a","http://www.w3.org/2005/08/addressing");
+    soapMessage.envelope.attributes.insert("xmlns:d","http://schemas.xmlsoap.org/ws/2005/04/discovery");
+    soapMessage.envelope.attributes.insert("xmlns:dn","http://www.onvif.org/ver10/network/wsdl");
+    soapMessage.envelope.attributes.insert("xmlns:dn","http://www.onvif.org/ver10/network/wsdl");
+
+    QSoapElement actionElement;
+    //actionElement.attributes.insert("SOAP-ENV:mustUnderstand","1");
+    actionElement.value="http://schemas.xmlsoap.org/ws/2005/04/discovery/Bye";
+    soapMessage.envelope.header.childs.insert("a:Action",actionElement);
+
+    QSoapElement messageidElement;
+    QUuid uuid = QUuid::createUuid();
+    messageidElement.value="urn:uuid:"+uuid.toString();
+    soapMessage.envelope.header.childs.insert("a:MessageID",messageidElement);
+
+    QSoapElement toElement;
+    //toElement.attributes.insert("SOAP-ENV:mustUnderstand","1");
+    toElement.value="urn:schemas-xmlsoap-org:ws:2005:04:discovery";
+    soapMessage.envelope.header.childs.insert("a:To",toElement);
+
+    QSoapElement helloElement;
+    QSoapElement typeElement;
+    typeElement.value="Hello";
+    helloElement.childs.insert("d:HelloType",typeElement);
+    soapMessage.envelope.body.childs.insert("d:Hello",helloElement);
+
+    QString helloText;
+    QTextStream helloTS(&helloText);
+    helloTS<<soapMessage;
+
+    udpSocket->writeDatagram(helloText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+}
+
+/*
+ * SOAP action:
+http://www.onvif.org/ver10/network/wsdl/Bye
+Input:
+[Bye] [ByeType]
+Output:
+[ByeResponse] [ResolveType]
+ * */
+void QSoapDiscoveryServer::Bye()
+{
+    QSoapMessage soapMessage;
+    soapMessage.envelope.attributes.insert("xmlns:SOAP-ENV","http://www.w3.org/2003/05/soap-envelope");
+    soapMessage.envelope.attributes.insert("xmlns:a","http://www.w3.org/2005/08/addressing");
+    soapMessage.envelope.attributes.insert("xmlns:d","http://schemas.xmlsoap.org/ws/2005/04/discovery");
+    soapMessage.envelope.attributes.insert("xmlns:dn","http://www.onvif.org/ver10/network/wsdl");
+    soapMessage.envelope.attributes.insert("xmlns:dn","http://www.onvif.org/ver10/network/wsdl");
+
+    QSoapElement actionElement;
+    //actionElement.attributes.insert("SOAP-ENV:mustUnderstand","1");
+    actionElement.value="http://schemas.xmlsoap.org/ws/2005/04/discovery/Bye";
+    soapMessage.envelope.header.childs.insert("a:Action",actionElement);
+
+    QSoapElement messageidElement;
+    QUuid uuid = QUuid::createUuid();
+    messageidElement.value="urn:uuid:"+uuid.toString();
+    soapMessage.envelope.header.childs.insert("a:MessageID",messageidElement);
+
+    QSoapElement toElement;
+    //toElement.attributes.insert("SOAP-ENV:mustUnderstand","1");
+    toElement.value="urn:schemas-xmlsoap-org:ws:2005:04:discovery";
+    soapMessage.envelope.header.childs.insert("a:To",toElement);
+
+    QSoapElement byeElement;
+    QSoapElement typeElement;
+    typeElement.value="Bye";
+    byeElement.childs.insert("d:ByeType",typeElement);
+    soapMessage.envelope.body.childs.insert("d:Bye",byeElement);
+
+    QString byeText;
+    QTextStream byeTS(&byeText);
+    byeTS<<soapMessage;
+
+
+    udpSocket->writeDatagram(byeText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+}
+
+/*
+ * SOAP action:
+http://www.onvif.org/ver10/network/wsdl/Probe
+Input:
+[Probe] [ProbeType]
+Output:
+[ProbeResponse] [ProbeMatchesType]
+ * */
+/*
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">
+  <s:Header>
+    <a:Action s:mustUnderstand="1">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>
+    <a:MessageID>urn:uuid:1d3cf678-1234-1234-12a456789abc</a:MessageID>
+    <a:ReplyTo><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>
+    <a:To s:mustUnderstand="1">urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>
+  </s:Header>
+  <s:Body>
+    <Probe xmlns="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+      <d:Types xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+             xmlns:dp0="http://www.onvif.org/ver10/network/wsdl"
+             xmlns:dp1="http://www.onvif.org/ver10/device/wsdl">
+       dp0:NetworkVideoTransmitter dp1:Device
+      </d:Types>
+    </Probe>
+    </s:Body>
+</s:Envelope>
+ */
+void QSoapDiscoveryServer::Probe()
+{
+    QSoapMessage soapMessage;
+    soapMessage.envelope.attributes.insert("xmlns:SOAP-ENV","http://www.w3.org/2003/05/soap-envelope");
+    soapMessage.envelope.attributes.insert("xmlns:a","http://schemas.xmlsoap.org/ws/2004/08/addressing");
+    soapMessage.envelope.attributes.insert("xmlns:d","http://schemas.xmlsoap.org/ws/2005/04/discovery");
+    soapMessage.envelope.attributes.insert("xmlns:dn","http://www.onvif.org/ver10/network/wsdl");
+    //soapMessage.envelope.attributes.insert("xmlns:dn","http://www.onvif.org/ver10/network/wsdl");
+
+    QSoapElement actionElement;
+    //actionElement.attributes.insert("SOAP-ENV:mustUnderstand","1");
+    actionElement.value="http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe";
+    soapMessage.envelope.header.childs.insert("a:Action",actionElement);
+
+    QSoapElement messageidElement;
+    QUuid uuid = QUuid::createUuid();
+    messageidElement.value="uuid:"+uuid.toString();
+    soapMessage.envelope.header.childs.insert("a:MessageID",messageidElement);
+
+    QSoapElement toElement;
+    //toElement.attributes.insert("SOAP-ENV:mustUnderstand","1");
+    toElement.value="urn:schemas-xmlsoap-org:ws:2005:04:discovery";
+    soapMessage.envelope.header.childs.insert("a:To",toElement);
+
+    QSoapElement probeElement;
+    QSoapElement typesElement;
+    typesElement.value="dn:NetworkVideoTransmitter";
+    QSoapElement scopesElement;
+    probeElement.childs.insert("d:Types",typesElement);
+    probeElement.childs.insert("d:Scopes",scopesElement);
+
+    soapMessage.envelope.body.childs.insert("d:Probe",probeElement);
+
+    QString probeText;
+    QTextStream probeTS(&probeText);
+    probeTS<<soapMessage;
+    //qDebug()<<probeText;
+    
+    udpSocket->writeDatagram(probeText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    //udpSocket->writeDatagram(probeText.toUtf8(), QHostAddress("239.255.255.250"), 3702);
+}
+
+void QSoapDiscoveryServer::readPendingDatagrams()
+{
+    while (udpSocket->hasPendingDatagrams())
+    {
+        //QNetworkDatagram datagram = udpSocket->receiveDatagram();
+        //datagram.data();
+        //processTheDatagram(datagram);
+
+        QByteArray datagram;
+        datagram.resize(udpSocket->pendingDatagramSize());
+        QHostAddress sender;
+        quint16 senderPort;
+
+        udpSocket->readDatagram(datagram.data(), datagram.size(),
+                                        &sender, &senderPort);
+
+        QString data(datagram);
+        qDebug()<<data.left(900);
+        qDebug()<<data.mid(850);
+    }
+}
