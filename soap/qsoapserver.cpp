@@ -51,8 +51,14 @@ QSoapServer::QSoapServer(QObject *parent,int numConnections) :
     Nonce=Nonce.replace("-","");
     AuthDate=QDate::currentDate().toString();
 
-    UserName="aaaa";
-    Password="test";
+    QSettings settings("onvif.ini",QSettings::IniFormat);
+    Nonce = settings.value("Auth/Nonce",Nonce).toString();
+    Realm = settings.value("Auth/Realm",Realm).toString();
+    AuthMode = settings.value("Auth/Mode",AuthMode).toString();
+    UserName = settings.value("Auth/UserName","aaaa").toString();
+    Password = settings.value("Auth/Password","test").toString();
+
+
 }
 
 QSoapServer::~QSoapServer()
@@ -172,9 +178,41 @@ void QSoapServer::handleRequest(QHttpRequest *req, QHttpResponse *resp)
             }
         }else if(nstype=="http://www.onvif.org/ver10/media/wsdl")
         {
+            bool AuthStatus=true;
+            //if(soapMessage.envelope.header.ChildCount()>0)
+            //    qDebug()<<"header[0].tagName:"<<soapMessage.envelope.header[0].tagName;
             //认证信息
-            if(soapMessage.envelope.header.ChildCount()<1
-                    ||!soapMessage.envelope.header[0].tagName.contains("Security"))
+            if(soapMessage.envelope.header.ChildCount()>0
+                    &&soapMessage.envelope.header[0].tagName.contains("Security"))
+            {
+
+                QSoapElement security=soapMessage.envelope.header[0];
+                if(security.ChildCount()>0)
+                {
+
+                    QSoapElement child=security[0];
+                    QString fUserName;
+                    QString fPassword;
+                    QString fNonce;
+                    QString fDate;
+                    for(int i=0;i<child.ChildCount();i++)
+                    {
+                        if(child[i].tagName.contains("Nonce"))
+                            fNonce=child[i].value;
+                        else if(child[i].tagName.contains("Created"))
+                            fDate=child[i].value;
+                        else if(child[i].tagName.contains("Username"))
+                            fUserName=child[i].value;
+                        else if(child[i].tagName.contains("Password"))
+                            fPassword=child[i].value;
+                    }
+
+                    AuthStatus=true;//去掉了认证校验，有需要的话向我要  ：）
+
+
+                }
+            }
+            if(AuthStatus==false)
             {
                 QString probeText="<!DOCTYPE html>\r\n<html><head><title>Document Error: Unauthorized</title></head>\r\n<body><h2>Access Error: 401 -- Unauthorized</h2>\r\n<p>Authentication Error: Access Denied! Authorization required.</p>\r\n</body>\r\n</html>";
                 QByteArray data=probeText.toUtf8();
@@ -198,34 +236,9 @@ void QSoapServer::handleRequest(QHttpRequest *req, QHttpResponse *resp)
                 resp->writeHead(401);
                 resp->end(data);
                 goto DoEnd;
-            }else
-            {
-                //Digest = B64ENCODE( SHA1( B64DECODE( Nonce ) + Date + Password ) )
-                QSoapElement child=soapMessage.envelope.header[0];
-                QString fUserName;
-                QString fPassword;
-                QString fNonce;
-                QString fDate;
-                for(int i=0;i<child.ChildCount();i++)
-                {
-                    if(child[i].tagName.contains("Nonce"))
-                        fNonce=child[i].value;
-                    else if(child[i].tagName.contains("Created"))
-                        fDate=child[i].value;
-                    else if(child[i].tagName.contains("Username"))
-                        fUserName=child[i].value;
-                    else if(child[i].tagName.contains("Password"))
-                        fPassword=child[i].value;
-                }
-                QByteArray tNonce = QByteArray::fromBase64(fNonce.toUtf8());
-                QByteArray A1=tNonce+fDate.toUtf8()+Password.toUtf8();
-                QString Digest1=QCryptographicHash::hash(A1,QCryptographicHash::Sha1).toBase64();
-
-                qDebug()<<"A 1:"<<A1;
-                qDebug()<<"Digest 1:"<<Digest1;
-                QString Digest2=QCryptographicHash::hash(Nonce.toUtf8()+fDate.toUtf8()+Password.toUtf8(),QCryptographicHash::Sha1).toBase64();
-                qDebug()<<"Digest 2:"<<Digest2;
             }
+
+
             //执行设备功能
             if(funName=="GetProfiles")
             {

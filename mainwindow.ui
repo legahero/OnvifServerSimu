@@ -69,7 +69,7 @@
    <widget class="QPushButton" name="pbsoaptest">
     <property name="geometry">
      <rect>
-      <x>314</x>
+      <x>510</x>
       <y>10</y>
       <width>91</width>
       <height>23</height>
@@ -77,6 +77,58 @@
     </property>
     <property name="text">
      <string>启动onvif服务</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>200</x>
+      <y>10</y>
+      <width>54</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>管理用户:</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="leUser">
+    <property name="geometry">
+     <rect>
+      <x>260</x>
+      <y>10</y>
+      <width>71</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>aaaa</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>340</x>
+      <y>10</y>
+      <width>54</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>密码:</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lePwd">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>10</y>
+      <width>113</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>test</string>
     </property>
    </widget>
   </widget>

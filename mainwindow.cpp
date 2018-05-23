@@ -67,13 +67,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
-    delete ui;
-    if(server!=NULL) delete server;
-    if(ds!=NULL) delete ds;
     if(mediaServer!=NULL)
     {
         delete mediaServer;
     }
+    if(server!=NULL) delete server;
+    if(ds!=NULL) delete ds;
+
+    delete ui;
 }
 
 void MainWindow::on_pbStart_clicked()
@@ -148,21 +149,48 @@ void MainWindow::on_pbsoaptest_clicked()
 
     QStringList ipStrs;
 
+    /*
     foreach (const QHostAddress &address, QNetworkInterface::allAddresses())
     {
         if (address.protocol() == QAbstractSocket::IPv4Protocol && address != QHostAddress(QHostAddress::LocalHost)){
 
             qDebug() << address.toString()<<" isLoopback:"<<address.isLoopback()<<" isMulticast:"<<address.isMulticast();
-            ipStrs << address.toString();
+            ipStrs << address.toString();            
+        }
+    }
+    */
+    foreach(const QNetworkInterface &interfaceItem, QNetworkInterface::allInterfaces())
+    {
+        if(interfaceItem.flags().testFlag(QNetworkInterface::IsUp)
+                &&interfaceItem.flags().testFlag(QNetworkInterface::IsRunning)
+                //&&interfaceItem.flags().testFlag(QNetworkInterface::CanBroadcast)
+                //&&interfaceItem.flags().testFlag(QNetworkInterface::CanMulticast)
+                &&!interfaceItem.flags().testFlag(QNetworkInterface::IsLoopBack)
+                &&!interfaceItem.humanReadableName().contains("VMware")
+                &&!interfaceItem.humanReadableName().contains("Tunneling")
+                )
+        {
+            qDebug()<<"Adapter Name:"<<interfaceItem.name()<<" "<<interfaceItem.humanReadableName();
+            qDebug()<<"Adapter Mac:"<<interfaceItem.hardwareAddress();
+
+            QList<QNetworkAddressEntry> addressEntryList=interfaceItem.addressEntries();
+            foreach(QNetworkAddressEntry addressEntryItem, addressEntryList)
+            {
+                const QHostAddress &address=addressEntryItem.ip();
+                qDebug()<<"Adapter Address:"<<address.toString();
+                if (address.protocol() == QAbstractSocket::IPv4Protocol && address != QHostAddress(QHostAddress::LocalHost))
+                {
+                    ipStrs << address.toString();
+                }
+            }
         }
     }
 
-
     if ( ipStrs.isEmpty()){
         qDebug() << "Server ip not selected";
-        return ;
+        //return ;
     }
-    QString localIP="";
+    QString localIP="127.0.0.1";
     if(ipStrs.length()==1) localIP=ipStrs[0];
     else
     {
@@ -185,9 +213,12 @@ void MainWindow::on_pbsoaptest_clicked()
     if(onvif==NULL)
     {
         onvif=new QSoapServer();
+        onvif->UserName=this->ui->leUser->text();
+        onvif->Password=this->ui->lePwd->text();
         if(onvif->listen(QHostAddress::Any, qint16(ui->lePort->text().toInt())))
         {
-            ui->teLog->append("soap 服务已经启动!");
+            ui->teLog->append("soap 服务已经启动:");
+            ui->teLog->append(DevUrl);
 
             onvif->m_dev.anaXAddr=DevUrl;
             onvif->m_dev.eveXAddr=DevUrl;
@@ -209,7 +240,8 @@ void MainWindow::on_pbsoaptest_clicked()
     if(mediaServer->Start("onvif")==0)
     {
         //qDebug()<<"Media Server started";
-        ui->teLog->append("Media Server started 服务已经启动!");
+        ui->teLog->append("Media Server started 服务已经启动:");
+        ui->teLog->append(DevMedUrl);
     }
 
 
