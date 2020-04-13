@@ -1,8 +1,10 @@
 #include "liveMedia.hh"
 #include "BasicUsageEnvironment.hh"
-#include "H264LiveVideoServerMediaSubsession.h"
+#include "liveh264videoservermediasubsession.h"
 #include "qmediaserver.h"
 #include <QDebug>
+
+//#include "winmicliveaudissrvmediasubsession.h"
 
 //QMediaServer::QMediaServer(QObject *parent) : QObject(parent)
 QMediaServer::QMediaServer(QObject *parent): QThread(parent)
@@ -11,14 +13,18 @@ QMediaServer::QMediaServer(QObject *parent): QThread(parent)
     rtspServer=NULL;
     env=NULL;
     appName="live";
+
 }
 QMediaServer::~QMediaServer()
 {
     if (rtspServer != NULL)
+    {
         rtspServer->close(*env,appName.toStdString().c_str());
+    }
 
     appName="";
     appPort=0;
+    qDebug()<<"~QMediaServer()";
 }
 
 //port 544
@@ -45,9 +51,7 @@ int QMediaServer::Start(QString app_name,int port)
     // Set up each of the possible streams that can be served by the
     // RTSP server.  Each such stream is implemented using a
     // "ServerMediaSession" object, plus one or more
-    // "ServerMediaSubsession" objects for each audio/video substream.
-
-    // A H.264 video elementary stream:
+    // "ServerMediaSubsession" objects for each audio/video substream.    
 
     if(appName.length()<1)
         appName="live";
@@ -55,9 +59,13 @@ int QMediaServer::Start(QString app_name,int port)
 
     ServerMediaSession* sms = ServerMediaSession::createNew(*env,streamName , streamName,
                       descriptionString);
-    sms->addSubsession(H264LiveVideoServerMediaSubsession::createNew(*env, reuseFirstSource));
-    rtspServer->addServerMediaSession(sms);
+    //视频调试
+    // A H.264 video elementary stream:
+    sms->addSubsession(LiveH264VideoServerMediaSubsession::createNew(*env, reuseFirstSource));
 
+    //音频调试
+    //sms->addSubsession(WinMicLiveAudiSsrvMediaSubsession::createNew(*env, reuseFirstSource));
+    rtspServer->addServerMediaSession(sms);
 
     char* url = rtspServer->rtspURL(sms);
     //UsageEnvironment& env1 = rtspServer->envir();

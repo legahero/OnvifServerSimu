@@ -6,6 +6,7 @@
 #include <qsqldatabase.h>
 #include "soap/qsoapmessage.h"
 #include "media/qmediaserver.h"
+#include "media/WindowsAudioInputDevice_mixer.hh"
 
 /*
  * QDB2，IBM DB2 7.1 以上的数据库版本
@@ -30,6 +31,22 @@ MainWindow::MainWindow(QWidget *parent) :
     foreach(QString driver,drivers)
     {
         ui->teLog->append(driver);
+    }
+
+    ui->teLog->append("系统支持以下麦克风端口:");
+    AudioPortNames* portNames = AudioInputDevice::getPortNames();
+    if (portNames == NULL) {
+        ui->teLog->append("AudioInputDevice::getPortNames() failed!\n");
+    }
+
+    printf("%d available audio input ports:\n", portNames->numPorts);
+    for (unsigned i = 0; i < portNames->numPorts; ++i) {
+        //QString AudioPortName=QString::fromLatin1(portNames->portName[i]);
+        QString AudioPortName2=QString::fromLocal8Bit(portNames->portName[i]);
+        //QString AudioPortName3=QString::fromWCharArray((const wchar_t *)portNames->portName[i]);
+        //QString AudioPortName4=QString::fromUtf8(portNames->portName[i]);
+
+        ui->teLog->append(AudioPortName2);
     }
 
     /*
@@ -63,18 +80,95 @@ MainWindow::MainWindow(QWidget *parent) :
     ds=NULL;
     onvif=NULL;
     mediaServer=NULL;
+
+    ui->pbStart->setVisible(false);//多余的http Server
+
+    //新建QSystemTrayIcon对象
+    m_pSysTrayIcon = new QSystemTrayIcon(this);
+    //新建托盘要显示的icon
+    QIcon icon = QIcon(":/logo32.png");
+    //将icon设到QSystemTrayIcon对象中
+    m_pSysTrayIcon->setIcon(icon);
+    //当鼠标移动到托盘上的图标时，会显示此处设置的内容
+    m_pSysTrayIcon->setToolTip(QObject::trUtf8("onvif模拟器系统托盘图标"));
+    //给QSystemTrayIcon添加槽函数
+    connect(m_pSysTrayIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)),this,SLOT(on_activatedSysTrayIcon(QSystemTrayIcon::ActivationReason)));
+
 }
 
 MainWindow::~MainWindow()
 {
+    Stop();
+    delete  m_pSysTrayIcon;
+    delete ui;
+}
+
+void MainWindow::Stop()
+{
+    if(ds!=NULL)
+    {
+        //ds->Bye();
+        //ds->deleteLater();
+        delete ds;
+        ds=NULL;
+    }
+    if(onvif!=NULL)
+    {
+        delete onvif;
+        onvif=NULL;
+    }
     if(mediaServer!=NULL)
     {
-        delete mediaServer;
-    }
-    if(server!=NULL) delete server;
-    if(ds!=NULL) delete ds;
+        mediaServer->exit();
 
-    delete ui;
+        mediaServer->deleteLater();
+        mediaServer=NULL;
+    }
+
+    if(server!=NULL)
+    {
+        delete server;
+        server=NULL;
+    }
+    Sleep(10);
+}
+
+void MainWindow::on_pbSysTrayIcon_clicked()
+{
+    //隐藏程序主窗口
+    this->hide();
+
+    //在系统托盘显示此对象
+    m_pSysTrayIcon->show();
+}
+
+void MainWindow::on_activatedSysTrayIcon(QSystemTrayIcon::ActivationReason reason)
+{
+    switch(reason){
+    case QSystemTrayIcon::Trigger:
+        //单击托盘图标
+        //显示主程序窗口
+        this->show();
+
+        /*
+        //显示消息球，1s后自动消失,第一个参数是标题,第二个参数是消息内容,第三个参数图标,第四个参数是超时毫秒数
+        m_pSysTrayIcon->showMessage(QObject::trUtf8("Message Title"),
+                                          QObject::trUtf8("欢迎使用此程序"),
+                                          QSystemTrayIcon::Information,
+                                          1000);
+        */
+        break;
+    case QSystemTrayIcon::DoubleClick:
+        //双击托盘图标
+        this->setWindowFlags(this->windowFlags() | Qt::WindowStaysOnTopHint);
+        this->show();
+        //仅仅显示在最前1次(点击主窗体时主窗体回到最前)
+        this->raise();
+        break;
+    case QSystemTrayIcon::Context:
+    default:
+        break;
+    }
 }
 
 void MainWindow::on_pbStart_clicked()
@@ -95,6 +189,8 @@ void MainWindow::on_pbStart_clicked()
 
 void MainWindow::on_pbsoaptest_clicked()
 {
+    if(ds)
+        Stop();
     /*
     QString soaptext="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\""
@@ -261,3 +357,4 @@ void MainWindow::on_pbsoaptest_clicked()
     //ds->Probe();
 
 }
+

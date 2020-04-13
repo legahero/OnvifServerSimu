@@ -1,5 +1,3 @@
-// Copyright (c) 2017-2017 legahero.  All rights reserved.
-// write by legahero QQ：502706647
 #include "qsoapdiscoveryservice.h"
 #include "qsoapmessage.h"
 #include <QUuid>
@@ -30,9 +28,10 @@ bool QSoapDiscoveryService::Start()
     //udpSocket->bind(QHostAddress::Any, 3702);
     //udpSocket->joinMulticastGroup(QHostAddress::Any);//IPV4_DISCOVERY_MCAST);
 
-    if(udpSocket->bind(QHostAddress::AnyIPv4, 3702,QUdpSocket::ReuseAddressHint|QUdpSocket::ShareAddress))
+    //if(udpSocket->bind(QHostAddress::AnyIPv4, 3702,QUdpSocket::ReuseAddressHint|QUdpSocket::ShareAddress))
+    if(udpSocket->bind(QHostAddress::AnyIPv4, DISCOVERY_MCAST_PORT,QUdpSocket::ReuseAddressHint|QUdpSocket::ShareAddress))
     {
-        udpSocket->joinMulticastGroup(IPV4_DISCOVERY_MCAST);//);
+        udpSocket->joinMulticastGroup(IPV4_DISCOVERY_MCAST);//QHostAddress::Any);
 
         connect(udpSocket, SIGNAL(readyRead()),this, SLOT(readPendingDatagrams()));
 
@@ -50,6 +49,7 @@ QSoapDiscoveryService::~QSoapDiscoveryService()
     {
         Bye();
 
+        _sleep(10);
         //udpSocket->leaveMulticastGroup(QHostAddress::Any);//IPV4_DISCOVERY_MCAST
         udpSocket->leaveMulticastGroup(IPV4_DISCOVERY_MCAST);
 
@@ -68,12 +68,16 @@ Input:
 Output:
 [HelloResponse] [ResolveType]
 
-<d:Hello>
+    <d:Hello>
         <a:EndpointReference>
             <a:Address>
-                uuid:98190dc2-0890-4ef8-ac9a-5940995e6119
+                urn:uuid:98190dc2-0890-4ef8-ac9a-5940995e6119
             </a:Address>
         </a:EndpointReference>
+        <d:Types>discows:NetworkVideoTransmitter</d:Types>
+        <d:Scopes>onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/hardware/NetworkVideoTransmitter onvif://www.onvif.org/location/country/Azerbaijan onvif://www.onvif.org/location/city/Baku onvif://www.onvif.org/name/NVT</d:Scopes>
+        <d:XAddrs>http://192.168.1.51:8004</d:XAddrs>
+        <d:MetadataVersion>1</d:MetadataVersion>
         <d:MetadataVersion>
             75965
         </d:MetadataVersion>
@@ -81,6 +85,8 @@ Output:
  * */
 void QSoapDiscoveryService::Hello()
 {
+    qDebug()<<"DiscoveryService Hello....,dev_id="<<dev_id;
+
     QSoapMessage soapMessage;
     soapMessage.envelope.attributes.insert("xmlns:SOAP-ENV","http://www.w3.org/2003/05/soap-envelope");
     soapMessage.envelope.attributes.insert("xmlns:a","http://www.w3.org/2005/08/addressing");
@@ -90,7 +96,7 @@ void QSoapDiscoveryService::Hello()
     QSoapElement actionElement;
     actionElement.tagName="a:Action";
     //actionElement.attributes.insert("SOAP-ENV:mustUnderstand","1");
-    actionElement.value="http://schemas.xmlsoap.org/ws/2005/04/discovery/Bye";
+    actionElement.value="http://schemas.xmlsoap.org/ws/2005/04/discovery/Hello";
     soapMessage.envelope.header.AppendChild(actionElement);
 
     QSoapElement messageidElement;
@@ -117,10 +123,27 @@ void QSoapDiscoveryService::Hello()
     devElement.tagName="a:EndpointReference";
     helloElement.AppendChild(devElement);
 
-    QSoapElement verElement;
-    verElement.value="1";
-    verElement.tagName="d:MetadataVersion";
-    helloElement.AppendChild(verElement);
+    //QSoapElement verElement;
+    //verElement.value="1";
+    //verElement.tagName="d:MetadataVersion";
+    //helloElement.AppendChild(verElement);
+    QSoapElement typesElement;
+    typesElement.value="dn:NetworkVideoTransmitter";
+    typesElement.tagName="d:Types";
+    helloElement.AppendChild(typesElement);
+    QSoapElement scopesElement;
+    scopesElement.value="onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/hardware/NetworkVideoTransmitter onvif://www.onvif.org/location/country/china onvif://www.onvif.org/location/city/GuangZhou onvif://www.onvif.org/name/NVT";
+    scopesElement.tagName="d:Scopes";
+    helloElement.AppendChild(scopesElement);
+    QSoapElement xAddrsElement;
+    xAddrsElement.value=dev_url;//"http://192.168.1.51:8004";//有待修改
+    xAddrsElement.tagName="d:XAddrs";
+    helloElement.AppendChild(xAddrsElement);
+    QSoapElement metadataVersionElement;
+    metadataVersionElement.value="1";
+    metadataVersionElement.tagName="d:MetadataVersion";
+    helloElement.AppendChild(metadataVersionElement);
+
 
     helloElement.tagName="d:Hello";
     soapMessage.envelope.body.AppendChild(helloElement);
@@ -129,7 +152,18 @@ void QSoapDiscoveryService::Hello()
     QTextStream helloTS(&helloText);
     helloTS<<soapMessage;
 
-    udpSocket->writeDatagram(helloText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    if(udpSocket->writeDatagram(helloText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT)<0)
+    {
+        //重发
+        udpSocket->writeDatagram(helloText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    }
+
+    if(udpSocket->writeDatagram(helloText.toUtf8(), IPV6_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT)<0)
+    {
+        //重发
+        udpSocket->writeDatagram(helloText.toUtf8(), IPV6_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    }
+    udpSocket->flush();
 }
 
 
@@ -164,6 +198,8 @@ void QSoapDiscoveryService::Hello()
  * */
 void QSoapDiscoveryService::ProbeMatches(QString MessageID,QHostAddress sender,quint16 senderPort)
 {
+    qDebug()<<"QSoapDiscoveryService::ProbeMatches MessageID="<<MessageID<<" sender="<<sender<<" port="<<senderPort;
+
     QSoapMessage soapMessage;
     soapMessage.envelope.attributes.insert("xmlns:SOAP-ENV","http://www.w3.org/2003/05/soap-envelope");
     soapMessage.envelope.attributes.insert("xmlns:a","http://schemas.xmlsoap.org/ws/2004/08/addressing");
@@ -246,7 +282,7 @@ void QSoapDiscoveryService::ProbeMatches(QString MessageID,QHostAddress sender,q
     scopesElement.tagName="d:Scopes";
     probeElement.AppendChild(scopesElement);
     QSoapElement xAddrsElement;
-    xAddrsElement.value=dev_url;"http://192.168.1.51:8004";//有待修改
+    xAddrsElement.value=dev_url;//"http://192.168.1.51:8004";//有待修改
     xAddrsElement.tagName="d:XAddrs";
     probeElement.AppendChild(xAddrsElement);
     QSoapElement metadataVersionElement;
@@ -263,7 +299,7 @@ void QSoapDiscoveryService::ProbeMatches(QString MessageID,QHostAddress sender,q
     QTextStream probeTS(&probeText);
     probeTS<<soapMessage;
     qDebug()<<"---------------------send to"<<sender.toString()<<" "<<QString::number(senderPort)<<"-----------------------";
-    qDebug()<<probeText.left(900);
+    qDebug()<<probeText.left(850);
     qDebug()<<probeText.mid(850);
     qDebug()<<"---------------------end-----------------------";
 
@@ -297,15 +333,20 @@ void QSoapDiscoveryService::ProbeMatches(QString MessageID,QHostAddress sender,q
       "</SOAP-ENV:Body>"
     "</SOAP-ENV:Envelope>";
     */
-    //udpSocket->writeDatagram(probeText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
-    udpSocket->writeDatagram(probeText.toUtf8(), sender, senderPort);
+    udpSocket->writeDatagram(probeText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    if(udpSocket->writeDatagram(probeText.toUtf8(), sender, senderPort)<0)//这个对方无法收到，奇怪的很
+    {
+        qDebug()<<"DiscoveryService ProbeMatches error!!!";
+        udpSocket->writeDatagram(probeText.toUtf8(), sender, senderPort);//重发
+    }
     udpSocket->flush();
+    qDebug()<<"DiscoveryService::ProbeMatches OK";
 }
 
 
 void QSoapDiscoveryService::ResolveMatches(QString MessageID,QHostAddress sender,quint16 senderPort)
 {
-
+    qDebug()<<"DiscoveryService::ResolveMatches MessageID="<<MessageID<<" sender="<<sender<<" port="<<senderPort;
 }
 
 /*
@@ -327,6 +368,8 @@ uuid:98190dc2-0890-4ef8-ac9a-5940995e6119
  * */
 void QSoapDiscoveryService::Bye()
 {
+    qDebug()<<"DiscoveryService::Bye....";
+
     QSoapMessage soapMessage;
     soapMessage.envelope.attributes.insert("xmlns:SOAP-ENV","http://www.w3.org/2003/05/soap-envelope");
     soapMessage.envelope.attributes.insert("xmlns:a","http://www.w3.org/2005/08/addressing");
@@ -336,7 +379,9 @@ void QSoapDiscoveryService::Bye()
 
     QSoapElement messageidElement;
     QUuid uuid = QUuid::createUuid();
-    messageidElement.value="urn:uuid:"+uuid.toString();
+    QString suuid=uuid.toString();
+    suuid=suuid.mid(1,suuid.length()-2);
+    messageidElement.value="urn:uuid:"+suuid;//去除{}//messageidElement.value="urn:uuid:"+uuid.toString();
     messageidElement.tagName="a:MessageID";
     soapMessage.envelope.header.AppendChild(messageidElement);
 
@@ -369,7 +414,16 @@ void QSoapDiscoveryService::Bye()
     byeTS<<soapMessage;
 
 
-    udpSocket->writeDatagram(byeText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    if(udpSocket->writeDatagram(byeText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT)<0)
+    {
+        udpSocket->writeDatagram(byeText.toUtf8(), IPV4_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    }
+
+    if(udpSocket->writeDatagram(byeText.toUtf8(), IPV6_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT)<0)
+    {
+        udpSocket->writeDatagram(byeText.toUtf8(), IPV6_DISCOVERY_MCAST, DISCOVERY_MCAST_PORT);
+    }
+    udpSocket->flush();
 }
 
 void QSoapDiscoveryService::readPendingDatagrams()
@@ -383,19 +437,22 @@ void QSoapDiscoveryService::readPendingDatagrams()
         QByteArray datagram;
         datagram.resize(udpSocket->pendingDatagramSize());
         QHostAddress sender;
-        quint16 senderPort;
+        quint16 senderPort=0;
 
         udpSocket->readDatagram(datagram.data(), datagram.size(),
                                         &sender, &senderPort);
 
         QString data(datagram);
-        qDebug()<<"--------------------from "<<sender.toString()<<" port:"<<senderPort<<"--------";
-        int ppos=0;
-        do{
-            qDebug()<<data.mid(ppos,900);
-            ppos+=900;
-        }while(ppos<data.length());
-        qDebug()<<"--------------------end";
+        if(!data.contains("soap:Envelope"))
+        {
+            qDebug()<<"--------------------read from "<<sender.toString()<<" port:"<<senderPort<<"--------"<<endl;
+            int ppos=0;
+            do{
+                qDebug()<<data.mid(ppos,900);
+                ppos+=900;
+            }while(ppos<data.length());
+            qDebug()<<"--------------------end"<<endl;
+        }
         QTextStream indata(&data);
         QSoapMessage soapMessage;
         indata>>soapMessage;
@@ -419,11 +476,14 @@ void QSoapDiscoveryService::readPendingDatagrams()
         if(action.contains("/"))
             action=action.mid(action.lastIndexOf('/')+1);
 
+        qDebug()<<"DiscoveryService readDatagram action="<<action<<" messageId="<<messageId<<endl;
         if(action=="Probe")
         {
+            qDebug()<<"action="<<action<<" call ProbeMatches";
             ProbeMatches(messageId,sender,senderPort);
         }else if(action=="Resolve")
         {
+            qDebug()<<"action="<<action<<" call ResolveMatches";
             ResolveMatches(messageId,sender,senderPort);
         }
     }

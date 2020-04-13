@@ -11,6 +11,11 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = OnvifServerSimu
 TEMPLATE = app
 
+#CONFIG += c++11
+
+#调试项
+DEFINES += DEBUG
+
 INCLUDEPATH +=./lib/ffmpeg/include/
 #INCLUDEPATH +=./Live555/
 INCLUDEPATH +=./Live555/liveMedia/include/
@@ -26,14 +31,16 @@ LIBS += -lpthread libwsock32 libws2_32 libntdll libpowrprof libwinmm
 LIBS += D:/git/OnvifServerSimu/lib/libx264.lib
 LIBS += -LD:/git/OnvifServerSimu/lib/ffmpeg/lib/ -lavdevice -lavcodec -lavformat -lavutil -lswscale -lpostproc -lavfilter
 
-
+#LIBS += -lDbgHelp
+#QMAKE_CXXFLAGS_RELEASE += $$QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO
+#QMAKE_LFLAGS_RELEASE  +=  $$QMAKE_LFLAGS_RELEASE_WITH_DEBUGINFO
 
 SOURCES += main.cpp\
         mainwindow.cpp \
     httpbase/qhttprequest.cpp \
     httpbase/qhttpresponse.cpp \
     httpbase/qhttpserver.cpp \
-    httpbase/http_parser.c \    
+    httpbase/http_parser.c \
     httpbase/threadhandle.cpp \
     httpbase/qasyntcpserver.cpp \
     httpbase/qasynhttpsocket.cpp \
@@ -53,9 +60,6 @@ SOURCES += main.cpp\
     soap/qonvifdevice.cpp \
     soap/qonvifmedia.cpp \   
     media/qmediaserver.cpp \
-    media/CamH264VideoStreamFramer.cpp \
-    media/H264EndWrapper.cpp \
-    media/H264LiveVideoServerMediaSubsession.cpp \
     Live555/BasicUsageEnvironment/BasicHashTable.cpp \
     Live555/BasicUsageEnvironment/BasicTaskScheduler.cpp \
     Live555/BasicUsageEnvironment/BasicTaskScheduler0.cpp \
@@ -240,10 +244,12 @@ SOURCES += main.cpp\
     Live555/UsageEnvironment/strDup.cpp \
     Live555/UsageEnvironment/UsageEnvironment.cpp \
     soap/qonvifanalyticsdevice.cpp \
-    soap/qonvifptz.cpp
-
-
-
+    soap/qonvifptz.cpp \
+    media/h264encoder.cpp \
+    media/liveh264videostreamframer.cpp \
+    media/liveh264videoservermediasubsession.cpp \
+    media/WindowsAudioInputDevice_common.cpp \
+    media/WindowsAudioInputDevice_mixer.cpp
 
 HEADERS  += mainwindow.h \
     httpbase/http_parser.h \
@@ -258,7 +264,7 @@ HEADERS  += mainwindow.h \
     httpbase/qasyntcpsocket.h \
     httpbase/qhttpserverfwd.h \
     httpbase/qconnectpool.h \
-    httpbase/qmultidbmanager.h \
+    httpbase/qmultidbmanager.h \    
     soap/qsoapenvelope.h \
     soap/qsoapmessage.h \
     soap/qsoapheader.h \
@@ -270,9 +276,6 @@ HEADERS  += mainwindow.h \
     soap/qonvifdevice.h \
     soap/qonvifmedia.h \
     media/qmediaserver.h \
-    media/CamH264VideoStreamFramer.h \
-    media/H264EndWrapper.h \
-    media/H264LiveVideoServerMediaSubsession.h \
     Live555/liveMedia/EBMLNumber.hh \
     Live555/liveMedia/H263plusVideoStreamParser.hh \
     Live555/liveMedia/MatroskaDemuxedTrack.hh \
@@ -290,7 +293,12 @@ HEADERS  += mainwindow.h \
     Live555/liveMedia/rtcp_from_spec.h \
     Live555/liveMedia/StreamParser.hh \
     soap/qonvifanalyticsdevice.h \
-    soap/qonvifptz.h
+    soap/qonvifptz.h \
+    media/WindowsAudioInputDevice_mixer.hh \
+    media/WindowsAudioInputDevice_common.hh \
+    media/h264encoder.h \
+    media/liveh264videostreamframer.h \
+    media/liveh264videoservermediasubsession.h
 
 
 
@@ -298,4 +306,6 @@ FORMS    += mainwindow.ui
 
 unix:include($$PWD/eventdispatcher_libev/eventdispatcher_libev.pri)
 
+RESOURCES += \
+    png.qrc
 

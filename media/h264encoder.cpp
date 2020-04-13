@@ -1,9 +1,8 @@
-//#include "log.h"
-#include "H264EndWrapper.h"
+#include "h264encoder.h"
 
 #include <stdio.h>
 using namespace std;
-#include <string.h> // strerror() 
+#include <string.h> // strerror()
 #include <stdlib.h>
 #include <QDebug>
 
@@ -11,7 +10,7 @@ using namespace std;
 void *my_malloc( int i_size )
 {
 #ifdef SYS_MACOSX
-    /* Mac OS X always returns 16 bytes aligned memory */
+    // Mac OS X always returns 16 bytes aligned memory
     return malloc( i_size );
 #elif defined( HAVE_MALLOC_H )
     return memalign( 16, i_size );
@@ -41,45 +40,52 @@ void my_free( void *p )
     }
 }
 
-H264EncWrapper::H264EncWrapper()
+H264Encoder::H264Encoder()
 {
     m_h = NULL;
     m_pBuffer = NULL;
     m_iBufferSize = 0;
     m_iFrameNum = 0;
-    x264_param_default(&m_param);
+    try {
+        x264_param_default(&m_param);
+    } catch (...) {
+        QMessageLogger(__FILE__, __LINE__, 0).debug()<<" x264_param_default error!";
+    }
+
 }
 
-H264EncWrapper::~H264EncWrapper()
+H264Encoder::~H264Encoder()
 {
+    if(NULL!=m_pBuffer)
+        delete [] m_pBuffer;
 }
 
-int H264EncWrapper::Initialize(int iWidth, int iHeight, int iRateBit, int iFps)
+int H264Encoder::Initialize(int iWidth, int iHeight, int iRateBit, int iFps)
 {
     m_param.i_width = iWidth;
     m_param.i_height = iHeight;
-    
+
     m_param.i_fps_num = iFps;
     m_param.i_fps_den = 1;
-    
-    m_param.rc.i_bitrate = iRateBit;
-	m_param.rc.i_rc_method = X264_RC_ABR;
 
-    m_param.i_frame_reference = 4; /* ²Î¿¼Ö¡µÄ×î´óÖ¡Êý */
+    m_param.rc.i_bitrate = iRateBit;
+    m_param.rc.i_rc_method = X264_RC_ABR;
+
+    m_param.i_frame_reference = 4; /* å‚è€ƒå¸§çš„æœ€å¤§å¸§æ•° */
     //m_param.i_keyint_max = 8;
     //m_param.i_keyint_min = 4;
 
     /*
-    //¼õÉÙÖ¡ÑÓÊ±µÄ·½·¨£¬Ò²¾ÍÊÇ£¨zerolatency ÉèÖÃ£©
+    //å‡å°‘å¸§å»¶æ—¶çš„æ–¹æ³•ï¼Œä¹Ÿå°±æ˜¯ï¼ˆzerolatency è®¾ç½®ï¼‰
     m_param.rc.i_lookahead = 0;
     m_param.i_sync_lookahead = 0;
     m_param.i_bframe = 0;
     m_param.b_sliced_threads = 1;
     m_param.b_vfr_input = 0;
     m_param.rc.b_mb_tree = 0;
-    //¼õÉÙÖ¡ÑÓÊ±µÄ·½·¨£¬Ò²¾ÍÊÇ£¨zerolatency ÉèÖÃ£©
+    //å‡å°‘å¸§å»¶æ—¶çš„æ–¹æ³•ï¼Œä¹Ÿå°±æ˜¯ï¼ˆzerolatency è®¾ç½®ï¼‰
 */
-    /* ¸ù¾ÝÊäÈë²ÎÊýparam³õÊ¼»¯×Ü½á¹¹ x264_t *h     */
+    /* æ ¹æ®è¾“å…¥å‚æ•°paramåˆå§‹åŒ–æ€»ç»“æž„ x264_t *h     */
     if( ( m_h = x264_encoder_open( &m_param ) ) == NULL )
     {
         fprintf( stderr, "x264 [error]: x264_encoder_open failed\n" );
@@ -89,40 +95,41 @@ int H264EncWrapper::Initialize(int iWidth, int iHeight, int iRateBit, int iFps)
     x264_picture_alloc( &m_pic, X264_CSP_I420, m_param.i_width, m_param.i_height );
     m_pic.i_type = X264_TYPE_AUTO;
     m_pic.i_qpplus1 = 0;
-    
+
     return 0;
 }
 
-int H264EncWrapper::Destroy()
+int H264Encoder::Destroy()
 {
     x264_picture_clean( &m_pic );
 
     // TODO: clean m_h
     //x264_encoder_close  (m_h); //?????
-    
+
    return 0;
 }
 
 //FILE* ff1 ;
-int H264EncWrapper::Encode(unsigned char* szYUVFrame, TNAL*& pNALArray, int& iNalNum)
+int H264Encoder::Encode(unsigned char* szYUVFrame, TNAL*& pNALArray, int& iNalNum)
 {
-    // ¿ÉÒÔÓÅ»¯Îªm_picÖÐ±£´æÒ»¸öÖ¸Õë,Ö±½ÓÖ´ÐÐszYUVFrame
+    // å¯ä»¥ä¼˜åŒ–ä¸ºm_picä¸­ä¿å­˜ä¸€ä¸ªæŒ‡é’ˆ,ç›´æŽ¥æ‰§è¡ŒszYUVFrame
     memcpy(m_pic.img.plane[0], szYUVFrame, m_param.i_width * m_param.i_height*3 / 2);
-    
+
     m_pic.i_pts = (int64_t)m_iFrameNum * m_param.i_fps_den;
 
     x264_picture_t pic_out;
     x264_nal_t *nal;
-    int i_nal, i; // nalµÄ¸öÊý
+    int i_nal, i; // nalçš„ä¸ªæ•°
 
     int iResult   = 0;
     iResult=x264_encoder_encode( m_h, &nal, &i_nal, &m_pic, &pic_out );
     if( iResult < 0 )
     {
         //fprintf( stderr, "x264 [error]: x264_encoder_encode failed\n" );
-        qDebug()<<"x264 [error]: x264_encoder_encode failed";
+        QMessageLogger(__FILE__, __LINE__, 0).debug()<<"x264 [error]: x264_encoder_encode failed";
         return -1;
-    }if( iResult = 0 )
+    }
+    if( iResult = 0 )
     {
         qDebug()<<"encode succeed,But it was cached.";
     }
@@ -130,49 +137,52 @@ int H264EncWrapper::Encode(unsigned char* szYUVFrame, TNAL*& pNALArray, int& iNa
     int i_size = 0;
     pNALArray = new TNAL[i_nal+1];
     memset(pNALArray, 0, sizeof(TNAL)*(i_nal+1));
-    
+
     for( i = 0; i < i_nal; i++ )
     {
         if( m_iBufferSize < nal[i].i_payload * 3/2 + 4 )
         {
             m_iBufferSize = nal[i].i_payload * 2 + 4;
-            my_free( m_pBuffer );
-            m_pBuffer = (uint8_t*)my_malloc( m_iBufferSize );
+            qDebug()<<"m_iBufferSize="<<m_iBufferSize<<endl;//291846,396308
+
+
+            //my_free( m_pBuffer );
+            //m_pBuffer = (uint8_t*)my_malloc( m_iBufferSize );
+
+            if(m_pBuffer)
+            {
+                //free(m_pBuffer);
+                delete [] m_pBuffer;
+            }
+            //m_pBuffer = (uint8_t*) malloc( m_iBufferSize+16);
+            m_pBuffer=new unsigned char[m_iBufferSize+16];
+            qDebug()<<"malloc m_pBuffer="<<m_pBuffer;
+
         }
 
         i_size = m_iBufferSize;
+
         x264_nal_encode( m_pBuffer, &i_size, 1, &nal[i] );
-        //x264_nal_encode( m_h, m_pBuffer, &nal[i] );
-
-        //* »ñÈ¡X264ÖÐ»º³åÖ¡Êý.
-        //int iFrames = x264_encoder_delayed_frames(m_h);
-        //qDebug()<<"Cache data in current encoder :"<<iFrames<<" Frame";
 
 
-        //DEBUG_LOG(INF, "Encode frame[%d], NAL[%d],  length = %d, ref_idc = %d, type = %d", 
-        //    m_iFrameNum, i, i_size, nal[i].i_ref_idc, nal[i].i_type);
-        //printf("Encode frame[%d], NAL[%d],  length = %d, ref_idc = %d, type = %d\n", 
-        //    m_iFrameNum, i, i_size, nal[i].i_ref_idc, nal[i].i_type);
-        
-        //fwrite(m_pBuffer, 1, i_size, ff1);
-        
-        //È¥µôbufferÖÐÇ°ÃæµÄ 00 00 00 01 ²ÅÊÇÕæÕýµÄnal unit
+        //åŽ»æŽ‰bufferä¸­å‰é¢çš„ 00 00 00 01 æ‰æ˜¯çœŸæ­£çš„nal unit
         pNALArray[i].size = i_size;
-        pNALArray[i].data = new unsigned char[i_size];
+        pNALArray[i].data = new unsigned char[i_size+16];//i_size+1
         memcpy(pNALArray[i].data, m_pBuffer, i_size);
-        
     }
 
-    iNalNum = i_nal;    
+    iNalNum = i_nal;
     m_iFrameNum++;
     return 0;
 }
 
-void H264EncWrapper::CleanNAL(TNAL* pNALArray, int iNalNum)
+//free buff
+void H264Encoder::CleanNAL(TNAL* &pNALArray, int iNalNum)
 {
     for(int i = 0; i < iNalNum; i++)
     {
-        delete []pNALArray[i].data;
+        if(NULL!=pNALArray[i].data)
+            delete []pNALArray[i].data;
         pNALArray[i].data = NULL;
     }
     delete []pNALArray;
